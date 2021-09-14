@@ -15,7 +15,11 @@
 #
 # This project requires the use of bazel.
 # Install instuctions https://docs.bazel.build/versions/master/install.html
-#
+
+# load env vars from .envrc if it exists
+ifneq ("$(wildcard .envrc)","")
+include .envrc
+endif
 
 # values used in workspace-status.sh
 DOCKER_REGISTRY?=cockroachdb
@@ -98,6 +102,24 @@ test/e2e/kind-%:
 	bazel build //hack/bin/...
 	PATH=${PATH}:bazel-bin/hack/bin kubetest2 kind --cluster-name=$(CLUSTER_NAME) \
 		--up --down -v 10 --test=exec -- make test/e2e/testrunner-kind-$(PACKAGE)
+	
+# This target is used by kubetest2-eks to run e2e tests.
+.PHONY: test/e2e/testrunner-eks
+test/e2e/testrunner-eks:
+	KUBECONFIG=$(TMPDIR)/$(CLUSTER_NAME)-eks.kubeconfig.yaml bazel-bin/hack/bin/kubectl create -f hack/eks-storageclass.yaml
+	bazel test --stamp //e2e/upgrades/...  --action_env=KUBECONFIG=$(TMPDIR)/$(CLUSTER_NAME)-eks.kubeconfig.yaml
+	bazel test --stamp //e2e/create/...  --action_env=KUBECONFIG=$(TMPDIR)/$(CLUSTER_NAME)-eks.kubeconfig.yaml
+	bazel test --stamp //e2e/decomission/...  --action_env=KUBECONFIG=$(TMPDIR)/$(CLUSTER_NAME)-eks.kubeconfig.yaml
+
+# Use this target to run e2e tests with a eks cluster.
+# This target uses kind to start a eks k8s cluster  and runs the e2e tests
+# against that cluster.
+.PHONY: test/e2e/eks
+test/e2e/eks:
+	bazel build //hack/bin/... //e2e/kubetest2-eks/...
+	PATH=${PATH}:bazel-bin/hack/bin:bazel-bin/e2e/kubetest2-eks/kubetest2-eks_/ \
+	bazel-bin/hack/bin/kubetest2 eks --cluster-name=$(CLUSTER_NAME)  --up --down -v 10 \
+		--test=exec -- make test/e2e/testrunner-eks
 
 # This target is used by kubetest2-tester-exec when running a gke test
 # k8s:k8s -type gke which checks to see if gke is up and running.
@@ -190,8 +212,15 @@ dev/fmt:
 
 .PHONY: dev/generate
 dev/generate:
-	bazel run //hack:update-codegen //hack:update-crds
+	bazel run //hack:update-codegen && bazel run //hack:update-crds
 
+.PHONY: dev/up
+dev/up:
+	@hack/dev.sh up
+
+.PHONY: dev/down
+dev/down:
+	@hack/dev.sh down
 #
 # Targets that allow to install the operator on an existing cluster
 #
@@ -214,9 +243,8 @@ k8s/delete:
 #
 .PHONY: dev/syncdeps
 dev/syncdeps:
-	bazel run //hack:update-deps \
-	bazel run //hack:update-bazel \
-	bazel run //:gazelle -- update-repos -from_file=go.mod
+	bazel run //hack:update-deps && \
+	bazel run //hack:update-bazel
 
 #
 # Release targets

@@ -1,6 +1,6 @@
 # Developer Notes
 
-This project requires bazel. Version 3.4.1 has been tested.
+This project requires bazel. Version 4.0.0 has been tested.
 
 See: https://docs.bazel.build/versions/master/install.html
 
@@ -39,6 +39,27 @@ We have four different groups of commands withing the Makefile
 
 Please run the testing targets locally before you push a PR.
 
+## Running Locally
+
+We use [kind] to run the operator in a local environment. This can provide a faster feedback cycle while developing since
+there's no need to set up a remote GKE/OpenShift cluster.
+
+[kind]: https://kind.sigs.k8s.io/
+
+**make dev/up**
+
+This command will get everything set up for you to begin testing out the operator. Specifically it will:
+
+* Start a local docker registry (via docker run) and configure it to work with kind/K8s
+* Start a kind cluster named test (context=kind-test)
+* Install the CRDs
+* Build a docker image and publish it to the local registry
+* Deploy the operator and wait for it to be available
+* Ensure your shell is configured to use the new cluster (kube context)
+
+**make dev/down**
+
+Tears down the kind cluster.
 
 ## Testing CR Database
 
@@ -142,3 +163,18 @@ oc delete -f test-registry.yaml
 oc apply -f test-registry.yaml
 ```
 5. Install operator from Operator Hub
+
+## Generated configs
+
+Some configs contain information about CockroachDB versions, for example docker image
+that contains CRDB version. In order to keep those values up to date, we
+generate some configs using templates. The templates can be found in the
+`config/templates` directory.
+
+### How to add a new template
+
+* Create a template file using [Go templates](https://pkg.go.dev/text/template).
+  The variables for the templates are defined as `templateData` in
+  `hack/crdbversions/main.go`.
+* Add the new template to the `targets` variable in `hack/crdbversions/main.go`.
+* Regenerate the outputs by running `make release/gen-templates`

@@ -26,14 +26,11 @@ import (
 
 	"github.com/cenkalti/backoff"
 	api "github.com/cockroachdb/cockroach-operator/apis/v1alpha1"
-	"github.com/cockroachdb/cockroach-operator/pkg/condition"
-	"github.com/cockroachdb/cockroach-operator/pkg/features"
 	"github.com/cockroachdb/cockroach-operator/pkg/kube"
 	"github.com/cockroachdb/cockroach-operator/pkg/ptr"
 	"github.com/cockroachdb/cockroach-operator/pkg/resource"
-	"github.com/cockroachdb/cockroach-operator/pkg/utilfeature"
+	"github.com/cockroachdb/errors"
 	"github.com/go-logr/logr"
-	"github.com/pkg/errors"
 	"go.uber.org/zap/zapcore"
 	kbatch "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -63,11 +60,6 @@ type versionChecker struct {
 //GetActionType returns api.VersionCheckerAction action used to set the cluster status errors
 func (v *versionChecker) GetActionType() api.ActionType {
 	return api.VersionCheckerAction
-}
-
-//Handles will return true if the conditions to run this action are satisfied
-func (v *versionChecker) Handles(conds []api.ClusterCondition) bool {
-	return utilfeature.DefaultMutableFeatureGate.Enabled(features.CrdbVersionValidator) && (condition.True(api.InitializedCondition, conds) || condition.False(api.InitializedCondition, conds)) && condition.False(api.CrdbVersionChecked, conds)
 }
 
 func (v *versionChecker) Act(ctx context.Context, cluster *resource.Cluster) error {
@@ -146,7 +138,11 @@ func (v *versionChecker) Act(ctx context.Context, cluster *resource.Cluster) err
 	if err := v.client.Get(ctx, key, job); err != nil {
 		err := WaitUntilJobPodIsRunning(ctx, clientset, job, log)
 		if err != nil {
-			log.Error(err, "job not found")
+			log.Error(err, "job pod is not running; deleting job")
+			if dErr := deleteJob(ctx, cluster, clientset, job); dErr != nil {
+				// Log the job deletion error, but return the underlying error that prompted deletion.
+				log.Error(dErr, "failed to delete the job")
+			}
 			return err
 		}
 	}
@@ -193,6 +189,9 @@ func (v *versionChecker) Act(ctx context.Context, cluster *resource.Cluster) err
 			if errBackoff := IsContainerStatusImagePullBackoff(ctx, clientset, job, log, image); errBackoff != nil {
 				err := InvalidContainerVersionError{Err: errBackoff}
 				return LogError("job image incorrect", err, log)
+			} else if dErr := deleteJob(ctx, cluster, clientset, job); dErr != nil {
+				// Log the job deletion error, but return the underlying error that prompted deletion.
+				log.Error(dErr, "failed to delete the job")
 			}
 			return errors.Wrapf(err, "failed to check the version of the crdb")
 		}
@@ -301,15 +300,9 @@ func (v *versionChecker) Act(ctx context.Context, cluster *resource.Cluster) err
 		return err
 	}
 
-	dp := metav1.DeletePropagationForeground
-
-	//delete the job only if we have managed to get the version and we do not have any errors
-	err = clientset.BatchV1().Jobs(cluster.Namespace()).Delete(ctx, job.Name, metav1.DeleteOptions{
-		GracePeriodSeconds: ptr.Int64(5),
-		PropagationPolicy:  &dp,
-	})
-	if err != nil {
-		log.Error(err, "failed to delete the job")
+	// If we got here, the version checker job was successful. Delete it.
+	if dErr := deleteJob(ctx, cluster, clientset, job); dErr != nil {
+		log.Error(dErr, "version checker job succeeded, but job failed to delete properly")
 	}
 
 	// we force the saving of the status on the cluster and cancel the loop
@@ -342,6 +335,14 @@ func isJobCompletedOrFailed(job *kbatch.Job) (bool, kbatch.JobConditionType) {
 		}
 	}
 	return false, ""
+}
+
+func deleteJob(ctx context.Context, cluster *resource.Cluster, clientset kubernetes.Interface, job *kbatch.Job) error {
+	dp := metav1.DeletePropagationForeground
+	return clientset.BatchV1().Jobs(cluster.Namespace()).Delete(ctx, job.Name, metav1.DeleteOptions{
+		GracePeriodSeconds: ptr.Int64(5),
+		PropagationPolicy:  &dp,
+	})
 }
 
 func IsJobPodRunning(

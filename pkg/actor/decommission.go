@@ -22,14 +22,13 @@ import (
 
 	api "github.com/cockroachdb/cockroach-operator/apis/v1alpha1"
 	"github.com/cockroachdb/cockroach-operator/pkg/clustersql"
-	"github.com/cockroachdb/cockroach-operator/pkg/condition"
 	"github.com/cockroachdb/cockroach-operator/pkg/database"
 	"github.com/cockroachdb/cockroach-operator/pkg/features"
 	"github.com/cockroachdb/cockroach-operator/pkg/kube"
 	"github.com/cockroachdb/cockroach-operator/pkg/resource"
 	"github.com/cockroachdb/cockroach-operator/pkg/scale"
 	"github.com/cockroachdb/cockroach-operator/pkg/utilfeature"
-	"github.com/pkg/errors"
+	"github.com/cockroachdb/errors"
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	kubetypes "k8s.io/apimachinery/pkg/types"
@@ -57,18 +56,10 @@ func (d decommission) GetActionType() api.ActionType {
 	return api.DecommissionAction
 }
 
-// Handles returns true if the Actor is enabled or can run
-func (d decommission) Handles(conds []api.ClusterCondition) bool {
-	if !utilfeature.DefaultMutableFeatureGate.Enabled(features.Decommission) {
-		return false
-	}
-	return condition.True(api.InitializedCondition, conds)
-}
-
 func (d decommission) Act(ctx context.Context, cluster *resource.Cluster) error {
 
 	log := d.log.WithValues("CrdbCluster", cluster.ObjectKey())
-	log.V(DEBUGLEVEL).Info("check decommission oportunities")
+	log.V(DEBUGLEVEL).Info("check decommission opportunities")
 	//we are not running decommission logic if a restart must be done
 	restartType := cluster.GetAnnotationRestartType()
 	if restartType != "" {
@@ -94,14 +85,7 @@ func (d decommission) Act(ctx context.Context, cluster *resource.Cluster) error 
 	}
 
 	nodes := uint(cluster.Spec().Nodes)
-	//We do not scale down if the nodes field is less than 3
-	//TODO @alina add validation webhook (see https://github.com/cockroachdb/cockroach-operator/issues/245)
-	if nodes < 3 {
-		err := errors.New("decommission with less than 3 nodes is not supported")
-		log.Error(err, "We cannot decommission if there are less than 3 nodes", "nodes", nodes)
-		return err
-	}
-	log.Info("replicas decommisioning", "status.CurrentReplicas", status.CurrentReplicas, "expected", cluster.Spec().Nodes)
+	log.Info("replicas decommissioning", "status.CurrentReplicas", status.CurrentReplicas, "expected", cluster.Spec().Nodes)
 	if status.CurrentReplicas <= cluster.Spec().Nodes {
 		return nil
 	}
@@ -118,7 +102,7 @@ func (d decommission) Act(ctx context.Context, cluster *resource.Cluster) error 
 		log.V(DEBUGLEVEL).Info("operator is running inside of kubernetes, connecting to service for db connection")
 	} else {
 		serviceName = fmt.Sprintf("%s-0.%s.%s", cluster.Name(), cluster.Name(), cluster.Namespace())
-		log.V(DEBUGLEVEL).Info("operator is NOT inside of kubernetes, connnecting to pod ordinal zero for db connection")
+		log.V(DEBUGLEVEL).Info("operator is NOT inside of kubernetes, connecting to pod ordinal zero for db connection")
 	}
 
 	// The connection needs to use the discovery service name because of the
@@ -171,8 +155,8 @@ func (d decommission) Act(ctx context.Context, cluster *resource.Cluster) error 
 		PVCPruner: &pvcPruner,
 	}
 	if err := scaler.EnsureScale(ctx, nodes, *cluster.Spec().GRPCPort, utilfeature.DefaultMutableFeatureGate.Enabled(features.AutoPrunePVC)); err != nil {
-		/// now check if the decommisiionStaleErr and update status
-		log.Error(err, "decomission failed")
+		/// now check if the decommissionStaleErr and update status
+		log.Error(err, "decommission failed")
 		cluster.SetFalse(api.DecommissionCondition)
 		CancelLoop(ctx)
 		return err

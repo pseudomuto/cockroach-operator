@@ -11,6 +11,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+#
+# Generated, do not edit. Please edit this file instead: config/templates/client-secure-operator.yaml.in
+#
 
 apiVersion: v1
 kind: Pod
@@ -20,7 +23,7 @@ spec:
   serviceAccountName: cockroach-operator-sa
   containers:
   - name: cockroachdb-client-secure
-    image: cockroachdb/cockroach:v21.1.0
+    image: cockroachdb/cockroach:v21.1.7
     imagePullPolicy: IfNotPresent
     volumeMounts:
     - name: client-certs

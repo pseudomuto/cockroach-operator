@@ -6,6 +6,7 @@ go_library(
         "assert.go",
         "builder.go",
         "cmp.go",
+        "env.go",
         "fake.go",
         "helpers.go",
         "require.go",
@@ -22,11 +23,12 @@ go_library(
         "//pkg/labels:go_default_library",
         "//pkg/resource:go_default_library",
         "//pkg/testutil/env:go_default_library",
+        "@com_github_cockroachdb_errors//:go_default_library",
         "@com_github_google_go_cmp//cmp:go_default_library",
         "@com_github_google_go_cmp//cmp/cmpopts:go_default_library",
-        "@com_github_pkg_errors//:go_default_library",
         "@com_github_stretchr_testify//require:go_default_library",
         "@io_k8s_api//apps/v1:go_default_library",
+        "@io_k8s_api//batch/v1:go_default_library",
         "@io_k8s_api//core/v1:go_default_library",
         "@io_k8s_apimachinery//pkg/api/errors:go_default_library",
         "@io_k8s_apimachinery//pkg/api/meta:go_default_library",
@@ -58,7 +60,6 @@ filegroup(
         ":package-srcs",
         "//pkg/testutil/env:all-srcs",
         "//pkg/testutil/exec:all-srcs",
-        "//pkg/testutil/paths:all-srcs",
     ],
     tags = ["automanaged"],
     visibility = ["//visibility:public"],
@@ -73,7 +74,13 @@ go_test(
 
 go_test(
     name = "go_default_test",
-    srcs = ["validate_headers_test.go"],
+    srcs = [
+        "env_test.go",
+        "validate_headers_test.go",
+    ],
     data = glob(["testdata/**"]),
-    embed = [":go_default_library"],
+    deps = [
+        ":go_default_library",
+        "@com_github_stretchr_testify//require:go_default_library",
+    ],
 )

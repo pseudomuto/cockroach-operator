@@ -39,17 +39,17 @@ spec:
       memory: "8Gi"
   tlsEnabled: true
 # You can set either a version of the db or a specific image name
-# cockroachDBVersion: v21.1.5
+# cockroachDBVersion: v21.1.7
   image:
-    name: cockroachdb/cockroach:v21.1.5
+    name: cockroachdb/cockroach:v21.1.7
   # nodes refers to the number of crdb pods that are created
-  # via the statefulset 
+  # via the statefulset
   nodes: 3
   additionalLabels:
     crdb: is-cool
   # affinity is a new API field that is behind a feature gate that is
   # disabled by default.  To enable please see the operator.yaml file.
-   
+
   # The affinity field will accept any podSpec affinity rule.
   # affinity:
   #   podAntiAffinity:

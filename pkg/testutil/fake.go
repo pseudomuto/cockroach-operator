@@ -19,7 +19,7 @@ package testutil
 import (
 	"context"
 
-	"github.com/pkg/errors"
+	"github.com/cockroachdb/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
@@ -90,14 +90,12 @@ type GetAction struct {
 	verb string
 	key  client.ObjectKey
 	gvr  schema.GroupVersionResource
-	obj  runtime.Object
 }
 
 type CreateAction struct {
 	verb string
 	key  client.ObjectKey
 	gvr  schema.GroupVersionResource
-	obj  runtime.Object
 }
 
 var _ Reactor = &simpleReactor{}

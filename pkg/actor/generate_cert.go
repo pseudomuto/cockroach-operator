@@ -26,13 +26,12 @@ import (
 	"time"
 
 	api "github.com/cockroachdb/cockroach-operator/apis/v1alpha1"
-	"github.com/cockroachdb/cockroach-operator/pkg/condition"
 	"github.com/cockroachdb/cockroach-operator/pkg/kube"
 	"github.com/cockroachdb/cockroach-operator/pkg/resource"
 	"github.com/cockroachdb/cockroach-operator/pkg/security"
 	"github.com/cockroachdb/cockroach-operator/pkg/util"
+	"github.com/cockroachdb/errors"
 	"github.com/go-logr/logr"
-	"github.com/pkg/errors"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
@@ -40,29 +39,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-const defaultKeySize = 2048
-
-// We use 366 days on certificate lifetimes to at least match X years,
-// otherwise leap years risk putting us just under.
-const defaultCALifetime = 10 * 366 * 24 * time.Hour  // ten years
-const defaultCertLifetime = 5 * 366 * 24 * time.Hour // five years
-
 // Options settable via command-line flags. See below for defaults.
-var keySize int
 var caCertificateLifetime time.Duration
 var certificateLifetime time.Duration
 var allowCAKeyReuse bool
 var overwriteFiles bool
 var generatePKCS8Key bool
-
-func initPreFlagsCertDefaults() {
-	keySize = defaultKeySize
-	caCertificateLifetime = defaultCALifetime
-	certificateLifetime = defaultCertLifetime
-	allowCAKeyReuse = false
-	overwriteFiles = false
-	generatePKCS8Key = false
-}
 
 func newGenerateCert(scheme *runtime.Scheme, cl client.Client, config *rest.Config) Actor {
 
@@ -84,13 +66,6 @@ type generateCert struct {
 //GetActionType returns api.RequestCertAction action used to set the cluster status errors
 func (rc *generateCert) GetActionType() api.ActionType {
 	return api.RequestCertAction
-}
-
-// Handles returns if this Actor can run.
-func (rc *generateCert) Handles(conds []api.ClusterCondition) bool {
-	// TODO this is not working am I doing this correctly?
-	// condition.True(api.CertificateGenerated, conds)
-	return condition.False(api.InitializedCondition, conds)
 }
 
 // Act func generates the various certificates required and then stores
@@ -241,7 +216,6 @@ func (rc *generateCert) generateCA(ctx context.Context, log logr.Logger, cluster
 		security.CreateCAPair(
 			rc.CertsDir,
 			rc.CAKey,
-			keySize,
 			caCertificateLifetime,
 			allowCAKeyReuse,
 			overwriteFiles),
@@ -309,7 +283,6 @@ func (rc *generateCert) generateNodeCert(ctx context.Context, log logr.Logger, c
 		security.CreateNodePair(
 			rc.CertsDir,
 			rc.CAKey,
-			keySize,
 			certificateLifetime,
 			overwriteFiles,
 			hosts),
@@ -378,7 +351,6 @@ func (rc *generateCert) generateClientCert(ctx context.Context, log logr.Logger,
 		security.CreateClientPair(
 			rc.CertsDir,
 			rc.CAKey,
-			keySize,
 			certificateLifetime,
 			overwriteFiles,
 			*u,

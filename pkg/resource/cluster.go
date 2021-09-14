@@ -25,10 +25,9 @@ import (
 	api "github.com/cockroachdb/cockroach-operator/apis/v1alpha1"
 	"github.com/cockroachdb/cockroach-operator/pkg/clusterstatus"
 	"github.com/cockroachdb/cockroach-operator/pkg/condition"
+	"github.com/cockroachdb/errors"
 	"github.com/gosimple/slug"
-	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 )
 
@@ -41,6 +40,8 @@ const (
 	CrdbRestartAnnotation        = "crdb.io/restart"
 	CrdbCertExpirationAnnotation = "crdb.io/certexpiration"
 	CrdbRestartTypeAnnotation    = "crdb.io/restarttype"
+
+	VersionCheckJobName = "vcheck"
 )
 
 func NewCluster(original *api.CrdbCluster) Cluster {
@@ -69,7 +70,6 @@ type Cluster struct {
 	Fetcher
 
 	cr       *api.CrdbCluster
-	scheme   *runtime.Scheme
 	initTime metav1.Time
 }
 
@@ -156,7 +156,7 @@ func (cluster Cluster) StatefulSetName() string {
 
 func (cluster Cluster) JobName() string {
 	slug.MaxLength = 63
-	return slug.Make(fmt.Sprintf("%s-vcheck-%d", cluster.Name(), getTimeHashInMinutes(time.Now())))
+	return slug.Make(fmt.Sprintf("%s-%s-%d", cluster.Name(), VersionCheckJobName, getTimeHashInMinutes(time.Now())))
 }
 func getTimeHashInMinutes(scheduledTime time.Time) int64 {
 	return scheduledTime.Unix() / 60
